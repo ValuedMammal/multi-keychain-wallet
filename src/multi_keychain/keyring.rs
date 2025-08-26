@@ -19,23 +19,32 @@ pub struct KeyRing<K> {
     pub(crate) secp: Secp256k1<All>,
     pub(crate) network: Network,
     pub(crate) descriptors: BTreeMap<K, Descriptor<DescriptorPublicKey>>,
+    pub(crate) default_keychain: K,
 }
 
 impl<K> KeyRing<K>
 where
     K: Ord + Clone,
 {
-    /// Construct new [`KeyRing`] with the provided `network`.
-    pub fn new(network: Network) -> Self {
+    /// Construct a new [`KeyRing`] with the provided `network` and a tuple containing a keychain
+    /// identifier and public descriptor. This keychain is automatically designed as the default
+    /// keychain.
+    pub fn new(network: Network, default_keychain: (K, Descriptor<DescriptorPublicKey>)) -> Self {
         Self {
             secp: Secp256k1::new(),
             network,
-            descriptors: BTreeMap::default(),
+            descriptors: BTreeMap::from([(default_keychain.0.clone(), default_keychain.1)]),
+            default_keychain: default_keychain.0.clone(),
         }
     }
 
-    /// Add descriptor, must not be [multipath](miniscript::Descriptor::is_multipath).
-    pub fn add_descriptor(&mut self, keychain: K, descriptor: impl IntoWalletDescriptor) {
+    /// Add a descriptor, must not be [multipath](miniscript::Descriptor::is_multipath).
+    pub fn add_descriptor(
+        &mut self,
+        keychain: K,
+        descriptor: impl IntoWalletDescriptor,
+        default: bool,
+    ) {
         let descriptor = descriptor
             .into_wallet_descriptor(&self.secp, self.network)
             .expect("err: invalid descriptor")
@@ -45,7 +54,15 @@ where
             "err: Use `add_multipath_descriptor` instead"
         );
 
+        if default || self.descriptors.is_empty() {
+            self.default_keychain = keychain.clone();
+        }
         self.descriptors.insert(keychain, descriptor);
+    }
+
+    /// Returns the specified default keychain on the KeyRing.
+    pub fn default_keychain(&self) -> K {
+        self.default_keychain.clone()
     }
 
     /// Initial changeset.
@@ -53,6 +70,7 @@ where
         ChangeSet {
             network: Some(self.network),
             descriptors: self.descriptors.clone(),
+            default_keychain: Some(self.default_keychain.clone()),
         }
     }
 
@@ -62,6 +80,7 @@ where
             secp: Secp256k1::new(),
             network: changeset.network?,
             descriptors: changeset.descriptors,
+            default_keychain: changeset.default_keychain?,
         })
     }
 }
@@ -94,6 +113,8 @@ pub struct ChangeSet<K: Ord> {
     pub network: Option<Network>,
     /// Added descriptors.
     pub descriptors: BTreeMap<K, Descriptor<DescriptorPublicKey>>,
+    /// Default keychain
+    pub default_keychain: Option<K>,
 }
 
 impl<K: Ord> Default for ChangeSet<K> {
@@ -101,6 +122,7 @@ impl<K: Ord> Default for ChangeSet<K> {
         Self {
             network: None,
             descriptors: Default::default(),
+            default_keychain: None,
         }
     }
 }
@@ -113,6 +135,8 @@ impl<K: Ord> Merge for ChangeSet<K> {
         }
         // merge descriptors
         self.descriptors.extend(other.descriptors);
+        // Note: if a new default keychain has been set, it will take precedence over the old one.
+        self.default_keychain = other.default_keychain;
     }
 
     fn is_empty(&self) -> bool {

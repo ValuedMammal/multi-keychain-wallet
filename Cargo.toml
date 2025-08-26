@@ -24,3 +24,7 @@ anyhow = "1"
 [[example]]
 name = "keyring"
 required-features = ["rusqlite"]
+
+[[example]]
+name = "default_keychain"
+required-features = ["rusqlite"]

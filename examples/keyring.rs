@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
             let mut keyring = KeyRing::new(network);
             for multipath_desc in [desc, desc2] {
                 for (did, desc) in label_descriptors(multipath_desc) {
-                    keyring.add_descriptor(did, desc);
+                    keyring.add_descriptor(did, desc, true);
                 }
             }
             let mut wallet = Wallet::new(keyring);
