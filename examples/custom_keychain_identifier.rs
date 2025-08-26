@@ -66,18 +66,20 @@ fn main() -> anyhow::Result<()> {
     let network = Network::Signet;
 
     // Create a new keyring with our custom KeychainId type
-    let mut keyring = KeyRing::new(network);
+    let desc_johnny = Descriptor::parse_descriptor(&Secp256k1::new(), desc1)
+        .expect("failed to parse descriptor")
+        .0;
+    let mut keyring = KeyRing::new(network, keychain_johnny.clone(), desc_johnny);
 
     // Assign descriptors to keychains
     for (keychain_identifier, desc) in [
-        (keychain_johnny.clone(), desc1),
         (keychain_samantha.clone(), desc2),
         (keychain_riley.clone(), desc3),
         (keychain_max.clone(), desc4),
         (keychain_penelope.clone(), desc5),
         (keychain_george.clone(), desc6),
     ] {
-        keyring.add_descriptor(keychain_identifier, desc);
+        keyring.add_descriptor(keychain_identifier, desc, false);
     }
 
     // Create a new wallet with our keyring
@@ -89,9 +91,15 @@ fn main() -> anyhow::Result<()> {
         "=".repeat(50)
     );
 
+    let (keychain_and_index, addr) = wallet.reveal_next_default_address_unwrap();
+    println!(
+        "Default keychain address (index {:?}): {}",
+        keychain_and_index.1, addr
+    );
+
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_johnny.clone()).unwrap();
     println!(
-        "Johnny's address (index {:?}):   {}",
+        "Johnny's address (index {:?}):         {}",
         keychain_and_index.1, addr
     );
 
@@ -99,19 +107,19 @@ fn main() -> anyhow::Result<()> {
         .reveal_next_address(keychain_samantha.clone())
         .unwrap();
     println!(
-        "Samantha's address (index {:?}): {}",
+        "Samantha's address (index {:?}):       {}",
         keychain_and_index.1, addr
     );
 
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_riley.clone()).unwrap();
     println!(
-        "Riley's address (index {:?}):    {}",
+        "Riley's address (index {:?}):          {}",
         keychain_and_index.1, addr
     );
 
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_max.clone()).unwrap();
     println!(
-        "Max's address (index {:?}):      {}",
+        "Max's address (index {:?}):            {}",
         keychain_and_index.1, addr
     );
 
@@ -119,13 +127,13 @@ fn main() -> anyhow::Result<()> {
         .reveal_next_address(keychain_penelope.clone())
         .unwrap();
     println!(
-        "Penelope's address (index {:?}): {}",
+        "Penelope's address (index {:?}):       {}",
         keychain_and_index.1, addr
     );
 
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_george.clone()).unwrap();
     println!(
-        "George's address (index {:?}):   {}",
+        "George's address (index {:?}):         {}",
         keychain_and_index.1, addr
     );
 

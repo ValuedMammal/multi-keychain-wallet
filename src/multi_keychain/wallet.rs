@@ -111,11 +111,8 @@ where
 
     /// Reveal next default address. Panics if the default implementation of `K` does not match
     /// a keychain contained in this wallet.
-    pub fn reveal_next_default_address_unwrap(&mut self) -> KeychainIndexed<K, Address>
-    where
-        K: Default,
-    {
-        self.reveal_next_address(K::default())
+    pub fn reveal_next_default_address_unwrap(&mut self) -> KeychainIndexed<K, Address> {
+        self.reveal_next_address(self.keyring.default_keychain())
             .expect("invalid keychain")
     }
 
