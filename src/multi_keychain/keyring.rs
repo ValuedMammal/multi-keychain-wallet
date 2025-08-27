@@ -79,6 +79,11 @@ where
         self.default_keychain = keychain;
     }
 
+    /// Return all keychain identifiers `K`.
+    pub fn list_keychains(&self) -> &BTreeMap<K, Descriptor<DescriptorPublicKey>> {
+        &self.descriptors
+    }
+
     /// Initial changeset.
     pub fn initial_changeset(&self) -> ChangeSet<K> {
         ChangeSet {
