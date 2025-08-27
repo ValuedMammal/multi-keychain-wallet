@@ -36,6 +36,10 @@ fn main() -> anyhow::Result<()> {
                     keyring.add_descriptor(did, desc);
                 }
             }
+
+            // Test the list_keychains_identifiers method
+            println!("This keyring contains the following keychains: {:?}", keyring.list_keychains_identifiers().collect::<Vec<_>>());
+
             let mut wallet = Wallet::new(keyring);
             wallet.persist_to_sqlite(&mut conn)?;
             wallet
