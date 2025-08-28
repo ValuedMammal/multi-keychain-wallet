@@ -86,6 +86,38 @@ where
 }
 
 impl KeyRing<Did> {
+    /// Create a new [`KeyRing`] from a multipath descriptor. You must specify a default keychain by providing
+    /// a default_keychain argument corresponding to one of the descriptors in the multipath.
+    pub fn new_multipath(network: Network, descriptor: impl IntoWalletDescriptor, default_keychain: usize) -> Self {
+        let descriptor = descriptor
+            .into_wallet_descriptor(&Secp256k1::new(), network)
+            .expect("err: invalid descriptor")
+            .0;
+        assert!(
+            descriptor.is_multipath(),
+            "err: Use `add_descriptor` instead"
+        );
+        let descriptors = descriptor
+            .into_single_descriptors()
+            .expect("err: invalid descriptor");
+
+        // The default keychain is the one at index specified by the user
+        assert!(descriptors.len() >= default_keychain);
+        let default_keychain = descriptors[default_keychain].descriptor_id();
+
+        let descriptors_map = descriptors
+            .into_iter()
+            .map(|desc| (desc.descriptor_id(), desc))
+            .collect();
+
+        Self {
+            secp: Secp256k1::new(),
+            network,
+            descriptors: descriptors_map,
+            default_keychain: default_keychain.clone(),
+        }
+    }
+
     /// Add multipath descriptor.
     pub fn add_multipath_descriptor(&mut self, descriptor: impl IntoWalletDescriptor) {
         let descriptor = descriptor
