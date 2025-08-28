@@ -7,8 +7,8 @@ use bdk_chain::DescriptorId;
 use bdk_wallet::rusqlite;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::Network;
-use miniscript::{Descriptor, DescriptorPublicKey};
 use miniscript::descriptor::DescriptorType;
+use miniscript::{Descriptor, DescriptorPublicKey};
 use multi_keychain_wallet::bdk_chain;
 use multi_keychain_wallet::multi_keychain::KeyRing;
 use multi_keychain_wallet::multi_keychain::Wallet;
@@ -30,37 +30,37 @@ fn main() -> anyhow::Result<()> {
         number: 1,
         nickname: "Johnny's keychain".to_string(),
         script_type: DescriptorType::Wpkh,
-        color: Color::Blue
+        color: Color::Blue,
     };
     let keychain_samantha = KeychainId {
         number: 2,
         nickname: "Samantha's keychain".to_string(),
         script_type: DescriptorType::Wpkh,
-        color: Color::Green
+        color: Color::Green,
     };
     let keychain_riley = KeychainId {
         number: 3,
         nickname: "Riley's keychain".to_string(),
         script_type: DescriptorType::Tr,
-        color: Color::Yellow
+        color: Color::Yellow,
     };
     let keychain_max = KeychainId {
         number: 4,
         nickname: "Max's keychain".to_string(),
         script_type: DescriptorType::Tr,
-        color: Color::Blue
+        color: Color::Blue,
     };
     let keychain_penelope = KeychainId {
         number: 5,
         nickname: "Penelope's keychain".to_string(),
         script_type: DescriptorType::Pkh,
-        color: Color::Green
+        color: Color::Green,
     };
     let keychain_george = KeychainId {
         number: 6,
         nickname: "George's keychain".to_string(),
         script_type: DescriptorType::Pkh,
-        color: Color::Yellow
+        color: Color::Yellow,
     };
 
     let network = Network::Signet;
@@ -84,25 +84,50 @@ fn main() -> anyhow::Result<()> {
     let mut wallet = Wallet::new(keyring);
 
     // Reveal addresses for each keychain
-    println!("\nRevealing addresses for each keychain\n{}", "=".repeat(50));
+    println!(
+        "\nRevealing addresses for each keychain\n{}",
+        "=".repeat(50)
+    );
 
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_johnny.clone()).unwrap();
-    println!("Johnny's address (index {:?}):   {}", keychain_and_index.1, addr);
+    println!(
+        "Johnny's address (index {:?}):   {}",
+        keychain_and_index.1, addr
+    );
 
-    let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_samantha.clone()).unwrap();
-    println!("Samantha's address (index {:?}): {}", keychain_and_index.1, addr);
+    let (keychain_and_index, addr) = wallet
+        .reveal_next_address(keychain_samantha.clone())
+        .unwrap();
+    println!(
+        "Samantha's address (index {:?}): {}",
+        keychain_and_index.1, addr
+    );
 
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_riley.clone()).unwrap();
-    println!("Riley's address (index {:?}):    {}", keychain_and_index.1, addr);
+    println!(
+        "Riley's address (index {:?}):    {}",
+        keychain_and_index.1, addr
+    );
 
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_max.clone()).unwrap();
-    println!("Max's address (index {:?}):      {}", keychain_and_index.1, addr);
+    println!(
+        "Max's address (index {:?}):      {}",
+        keychain_and_index.1, addr
+    );
 
-    let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_penelope.clone()).unwrap();
-    println!("Penelope's address (index {:?}): {}", keychain_and_index.1, addr);
+    let (keychain_and_index, addr) = wallet
+        .reveal_next_address(keychain_penelope.clone())
+        .unwrap();
+    println!(
+        "Penelope's address (index {:?}): {}",
+        keychain_and_index.1, addr
+    );
 
     let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_george.clone()).unwrap();
-    println!("George's address (index {:?}):   {}", keychain_and_index.1, addr);
+    println!(
+        "George's address (index {:?}):   {}",
+        keychain_and_index.1, addr
+    );
 
     Ok(())
 }
