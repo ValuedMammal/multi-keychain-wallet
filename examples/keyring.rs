@@ -30,10 +30,10 @@ fn main() -> anyhow::Result<()> {
     let mut wallet = match Wallet::from_sqlite(&mut conn)? {
         Some(w) => w,
         None => {
-            let mut keyring = KeyRing::new(network);
+            let mut keyring = KeyRing::new_multipath(network, desc, 0);
             for multipath_desc in [desc, desc2] {
                 for (did, desc) in label_descriptors(multipath_desc) {
-                    keyring.add_descriptor(did, desc);
+                    keyring.add_descriptor(did, desc, true);
                 }
             }
             let mut wallet = Wallet::new(keyring);
@@ -59,7 +59,7 @@ fn label_descriptors(
         .expect("failed to parse descriptor")
         .0;
     desc.into_single_descriptors()
-        .expect("inavlid descriptor")
+        .expect("invalid descriptor")
         .into_iter()
         .map(|desc| (desc.descriptor_id(), desc))
 }
