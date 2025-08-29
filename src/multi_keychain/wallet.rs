@@ -141,10 +141,23 @@ where
     }
 
     /// Compute the balance.
-    pub fn balance(&self) -> bdk_chain::Balance {
+    pub fn total_balance(&self) -> bdk_chain::Balance {
         use bdk_chain::CanonicalizationParams;
         let chain = &self.chain;
         let outpoints = self.tx_graph.index.outpoints().clone();
+        self.tx_graph.graph().balance(
+            chain,
+            chain.tip().block_id(),
+            CanonicalizationParams::default(),
+            outpoints,
+            |_, _| false,
+        )
+    }
+
+    pub fn keychain_balance(&self, keychain: K) -> bdk_chain::Balance {
+        use bdk_chain::CanonicalizationParams;
+        let chain = &self.chain;
+        let outpoints = self.tx_graph.index.keychain_outpoints(keychain);
         self.tx_graph.graph().balance(
             chain,
             chain.tip().block_id(),
@@ -214,6 +227,11 @@ where
             Some(&self.stage)
         }
     }
+
+    /// Returns the latest checkpoint.
+    pub fn latest_checkpoint(&self) -> CheckPoint {
+        self.chain.tip()
+    }
 }
 
 #[cfg(feature = "rusqlite")]
@@ -270,6 +288,16 @@ pub struct Update<K> {
     pub tx_update: bdk_chain::TxUpdate<ConfirmationBlockTime>,
     /// last active keychain indices
     pub last_active_indices: BTreeMap<K, u32>,
+}
+
+impl<K> Default for Update<K> {
+    fn default() -> Self {
+        Self {
+            chain: None,
+            tx_update: bdk_chain::TxUpdate::<ConfirmationBlockTime>::default(),
+            last_active_indices: BTreeMap::new(),
+        }
+    }
 }
 
 impl<K> From<bdk_chain::spk_client::FullScanResponse<K>> for Update<K> {
