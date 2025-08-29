@@ -227,6 +227,11 @@ where
             Some(&self.stage)
         }
     }
+
+    /// Returns the latest checkpoint.
+    pub fn latest_checkpoint(&self) -> CheckPoint {
+        self.chain.tip()
+    }
 }
 
 #[cfg(feature = "rusqlite")]
@@ -283,6 +288,16 @@ pub struct Update<K> {
     pub tx_update: bdk_chain::TxUpdate<ConfirmationBlockTime>,
     /// last active keychain indices
     pub last_active_indices: BTreeMap<K, u32>,
+}
+
+impl<K> Default for Update<K> {
+    fn default() -> Self {
+        Self {
+            chain: None,
+            tx_update: bdk_chain::TxUpdate::<ConfirmationBlockTime>::default(),
+            last_active_indices: BTreeMap::new(),
+        }
+    }
 }
 
 impl<K> From<bdk_chain::spk_client::FullScanResponse<K>> for Update<K> {
