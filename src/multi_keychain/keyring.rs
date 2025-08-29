@@ -48,6 +48,11 @@ where
         self.descriptors.insert(keychain, descriptor);
     }
 
+    /// Return all keychain identifiers `K`.
+    pub fn list_keychains_identifiers(&self) -> impl Iterator<Item = K> + '_ {
+        self.descriptors.keys().cloned()
+    }
+
     /// Initial changeset.
     pub fn initial_changeset(&self) -> ChangeSet<K> {
         ChangeSet {
