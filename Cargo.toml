@@ -28,3 +28,6 @@ required-features = ["rusqlite"]
 [[example]]
 name = "custom_keychain_identifier"
 required-features = ["rusqlite"]
+
+[[example]]
+name = "transient_keychains"
