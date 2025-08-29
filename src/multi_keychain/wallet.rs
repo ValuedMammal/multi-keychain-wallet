@@ -141,10 +141,23 @@ where
     }
 
     /// Compute the balance.
-    pub fn balance(&self) -> bdk_chain::Balance {
+    pub fn total_balance(&self) -> bdk_chain::Balance {
         use bdk_chain::CanonicalizationParams;
         let chain = &self.chain;
         let outpoints = self.tx_graph.index.outpoints().clone();
+        self.tx_graph.graph().balance(
+            chain,
+            chain.tip().block_id(),
+            CanonicalizationParams::default(),
+            outpoints,
+            |_, _| false,
+        )
+    }
+
+    pub fn keychain_balance(&self, keychain: K) -> bdk_chain::Balance {
+        use bdk_chain::CanonicalizationParams;
+        let chain = &self.chain;
+        let outpoints = self.tx_graph.index.keychain_outpoints(keychain);
         self.tx_graph.graph().balance(
             chain,
             chain.tip().block_id(),
