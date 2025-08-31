@@ -65,6 +65,7 @@ impl ChangeSet<DescriptorId> {
 
     /// Get v0 sqlite [ChangeSet] schema.
     pub fn schema_v0() -> alloc::string::String {
+        // bool is 1 for default keychain and 0 otherwise
         format!(
             "CREATE TABLE {} ( \
                 id INTEGER PRIMARY KEY NOT NULL, \
@@ -72,7 +73,8 @@ impl ChangeSet<DescriptorId> {
             ); \
             CREATE TABLE {} ( \
                 descriptor_id TEXT PRIMARY KEY NOT NULL, \
-                descriptor BLOB NOT NULL \
+                descriptor BLOB NOT NULL, \
+                bool INTEGER NOT NULL CHECK ( bool >= 0 AND bool <= 1) \
             );",
             Self::WALLET_TABLE_NAME,
             Self::DESCRIPTORS_TABLE_NAME,
@@ -131,18 +133,22 @@ impl ChangeSet<DescriptorId> {
 
         // Read descriptors
         let mut descriptor_stmt = db_tx.prepare(&format!(
-            "SELECT descriptor_id, descriptor FROM {}",
+            "SELECT descriptor_id, descriptor, bool FROM {}",
             Self::DESCRIPTORS_TABLE_NAME
         ))?;
         let rows = descriptor_stmt.query_map([], |row| {
             Ok((
                 row.get::<_, Impl<DescriptorId>>("descriptor_id")?,
                 row.get::<_, Impl<Descriptor<DescriptorPublicKey>>>("descriptor")?,
+                row.get::<_, u8>("bool")?,
             ))
         })?;
         for row in rows {
-            let (Impl(did), Impl(descriptor)) = row?;
+            let (Impl(did), Impl(descriptor), bool) = row?;
             keyring.descriptors.insert(did, descriptor);
+            if bool == 1 {
+                keyring.default_keychain = Some(did);
+            }
         }
 
         changeset.keyring = keyring;
@@ -174,14 +180,32 @@ impl ChangeSet<DescriptorId> {
 
         // Write descriptors
         let mut descriptor_stmt = db_tx.prepare_cached(&format!(
-            "INSERT OR IGNORE INTO {}(descriptor_id, descriptor) VALUES(:descriptor_id, :descriptor)",
+            "INSERT OR IGNORE INTO {}(descriptor_id, descriptor, bool) VALUES(:descriptor_id, :descriptor, :bool)",
             Self::DESCRIPTORS_TABLE_NAME,
         ))?;
+
         for (&did, descriptor) in &keyring.descriptors {
             descriptor_stmt.execute(named_params! {
-                ":descriptor_id": Impl(did),
-                ":descriptor": Impl(descriptor.clone()),
+            ":descriptor_id": Impl(did),
+            ":descriptor": Impl(descriptor.clone()),
+            // All new keychains are marked as "not-default" initially
+            ":bool": 0,
             })?;
+        }
+
+        let mut remove_old_default_stmt = db_tx.prepare_cached(&format!(
+            "UPDATE {} SET bool = 0 WHERE bool = 1",
+            Self::DESCRIPTORS_TABLE_NAME,
+        ))?;
+
+        let mut add_default_stmt = db_tx.prepare_cached(&format!(
+            "UPDATE {} SET bool = 1 WHERE descriptor_id = :descriptor_id",
+            Self::DESCRIPTORS_TABLE_NAME,
+        ))?;
+
+        if let Some(default_did) = keyring.default_keychain {
+            remove_old_default_stmt.execute(())?;
+            add_default_stmt.execute(named_params! { ":descriptor_id": Impl(default_did),})?;
         }
 
         self.local_chain.persist_to_sqlite(db_tx)?;
