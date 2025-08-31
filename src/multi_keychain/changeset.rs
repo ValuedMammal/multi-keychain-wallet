@@ -72,7 +72,8 @@ impl ChangeSet<DescriptorId> {
             ); \
             CREATE TABLE {} ( \
                 descriptor_id TEXT PRIMARY KEY NOT NULL, \
-                descriptor BLOB NOT NULL \
+                descriptor BLOB NOT NULL, \
+                is_default BOOLEAN NOT NULL CHECK ( is_default IN (0,1) ) \
             );",
             Self::WALLET_TABLE_NAME,
             Self::DESCRIPTORS_TABLE_NAME,
@@ -131,18 +132,22 @@ impl ChangeSet<DescriptorId> {
 
         // Read descriptors
         let mut descriptor_stmt = db_tx.prepare(&format!(
-            "SELECT descriptor_id, descriptor FROM {}",
+            "SELECT descriptor_id, descriptor, is_default FROM {}",
             Self::DESCRIPTORS_TABLE_NAME
         ))?;
         let rows = descriptor_stmt.query_map([], |row| {
             Ok((
                 row.get::<_, Impl<DescriptorId>>("descriptor_id")?,
                 row.get::<_, Impl<Descriptor<DescriptorPublicKey>>>("descriptor")?,
+                row.get::<_, u8>("is_default")?,
             ))
         })?;
         for row in rows {
-            let (Impl(did), Impl(descriptor)) = row?;
+            let (Impl(did), Impl(descriptor), is_default) = row?;
             keyring.descriptors.insert(did, descriptor);
+            if is_default == 1 {
+                keyring.default_keychain = Some(did);
+            }
         }
 
         changeset.keyring = keyring;
@@ -174,14 +179,32 @@ impl ChangeSet<DescriptorId> {
 
         // Write descriptors
         let mut descriptor_stmt = db_tx.prepare_cached(&format!(
-            "INSERT OR IGNORE INTO {}(descriptor_id, descriptor) VALUES(:descriptor_id, :descriptor)",
+            "INSERT OR IGNORE INTO {}(descriptor_id, descriptor, is_default) VALUES(:descriptor_id, :descriptor, :is_default)",
             Self::DESCRIPTORS_TABLE_NAME,
         ))?;
+
         for (&did, descriptor) in &keyring.descriptors {
             descriptor_stmt.execute(named_params! {
-                ":descriptor_id": Impl(did),
-                ":descriptor": Impl(descriptor.clone()),
+            ":descriptor_id": Impl(did),
+            ":descriptor": Impl(descriptor.clone()),
+            // All new keychains are marked as "not-default" initially
+            ":is_default": 0,
             })?;
+        }
+
+        let mut remove_old_default_stmt = db_tx.prepare_cached(&format!(
+            "UPDATE {} SET is_default = 0 WHERE is_default = 1",
+            Self::DESCRIPTORS_TABLE_NAME,
+        ))?;
+
+        let mut add_default_stmt = db_tx.prepare_cached(&format!(
+            "UPDATE {} SET is_default = 1 WHERE descriptor_id = :descriptor_id",
+            Self::DESCRIPTORS_TABLE_NAME,
+        ))?;
+
+        if let Some(default_did) = keyring.default_keychain {
+            remove_old_default_stmt.execute(())?;
+            add_default_stmt.execute(named_params! { ":descriptor_id": Impl(default_did),})?;
         }
 
         self.local_chain.persist_to_sqlite(db_tx)?;
