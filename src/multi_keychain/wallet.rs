@@ -137,6 +137,11 @@ where
         self.tx_graph.index.keychains()
     }
 
+    /// Get the default keychain
+    pub fn default_keychain(&self) -> K {
+        self.keyring.default_keychain()
+    }
+
     /// Compute the balance.
     pub fn balance(&self) -> bdk_chain::Balance {
         use bdk_chain::CanonicalizationParams;
