@@ -21,29 +21,34 @@ fn main() -> anyhow::Result<()> {
 
     let network = Network::Signet;
 
-    let desc = "wpkh([83737d5e/84'/1'/1']tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/<0;1>/*)";
-    let desc2 = "tr([83737d5e/86'/1'/1']tpubDDR5GgtoxS8fNuSTJU6huqQKGzWshPaemb3UwFDoAXCsyakcQoRcFDMiGUVRX43Lofd7ZB82RcUvu1xnZ5oGZhbr43dRkY8xm2KGhpcq93o/<0;1>/*)";
+    let desc1 = "wpkh([83737d5e/84'/1'/1']tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/0/*)";
+    let desc2 = "tr([83737d5e/86'/1'/1']tpubDDR5GgtoxS8fNuSTJU6huqQKGzWshPaemb3UwFDoAXCsyakcQoRcFDMiGUVRX43Lofd7ZB82RcUvu1xnZ5oGZhbr43dRkY8xm2KGhpcq93o/1/*)";
 
-    let default_did: DescriptorId =
-        "6f3ba87443e825675b2b1cb8da505831422a7d214c515070570885180a1b2733".parse()?;
+    let desc1_id = get_descriptor_id(desc1);
+    let desc2_id = get_descriptor_id(desc2);
 
     let mut wallet = match Wallet::from_sqlite(&mut conn)? {
         Some(w) => w,
         None => {
-            let mut keyring = KeyRing::new(network);
-            for multipath_desc in [desc, desc2] {
-                for (did, desc) in label_descriptors(multipath_desc) {
-                    keyring.add_descriptor(did, desc);
-                }
-            }
+            // Create a keyring with an initial and default keychain
+            let mut keyring = KeyRing::new(network, desc1_id, desc1);
+
+            // Add a secondary keychain to the keyring
+            keyring.add_descriptor(desc2_id.clone(), desc2, false);
+
             let mut wallet = Wallet::new(keyring);
             wallet.persist_to_sqlite(&mut conn)?;
             wallet
         }
     };
 
-    let (indexed, addr) = wallet.reveal_next_address(default_did).unwrap();
-    println!("Address: {:?} {}", indexed, addr);
+    // Reveal an address on the default keychain
+    let (indexed, addr) = wallet.reveal_next_default_address_unwrap();
+    println!("Address on default keychain:   {:?} {}", indexed, addr);
+
+    // Reveal an address on another keychain
+    let (indexed2, addr2) = wallet.reveal_next_address(desc2_id).unwrap();
+    println!("Address on secondary keychain: {:?} {}", indexed2, addr2);
 
     let changeset = wallet.persist_to_sqlite(&mut conn)?;
     println!("Change persisted: {}", changeset.is_some());
@@ -51,15 +56,10 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Helper to label descriptors by descriptor ID.
-fn label_descriptors(
-    s: &str,
-) -> impl Iterator<Item = (DescriptorId, Descriptor<DescriptorPublicKey>)> {
+/// Helper to pull the descriptor ID out of a descriptor string
+fn get_descriptor_id(s: &str) -> DescriptorId {
     let desc = Descriptor::parse_descriptor(&Secp256k1::new(), s)
         .expect("failed to parse descriptor")
         .0;
-    desc.into_single_descriptors()
-        .expect("inavlid descriptor")
-        .into_iter()
-        .map(|desc| (desc.descriptor_id(), desc))
+    desc.descriptor_id()
 }
