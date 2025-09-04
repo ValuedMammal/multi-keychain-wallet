@@ -20,6 +20,7 @@ path = "."
 
 [dev-dependencies]
 anyhow = "1"
+tempfile = "3.21.0"
 
 [[example]]
 name = "keyring"
