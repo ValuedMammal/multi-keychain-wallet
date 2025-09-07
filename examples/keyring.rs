@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
             let mut keyring = KeyRing::new(network, desc1_id, desc1);
 
             // Add a secondary keychain to the keyring
-            keyring.add_descriptor(desc2_id.clone(), desc2, false);
+            keyring.add_descriptor(desc2_id, desc2, false);
 
             let mut wallet = Wallet::new(keyring);
             wallet.persist_to_sqlite(&mut conn)?;
