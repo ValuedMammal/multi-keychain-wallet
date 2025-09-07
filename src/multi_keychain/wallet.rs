@@ -137,6 +137,11 @@ where
         self.tx_graph.index.keychains()
     }
 
+    /// Get the default keychain
+    pub fn default_keychain(&self) -> K {
+        self.keyring.default_keychain()
+    }
+
     /// Compute the balance.
     pub fn balance(&self) -> bdk_chain::Balance {
         use bdk_chain::CanonicalizationParams;
@@ -276,5 +281,48 @@ impl<K> From<bdk_chain::spk_client::FullScanResponse<K>> for Update<K> {
             tx_update: resp.tx_update,
             last_active_indices: resp.last_active_indices,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::bdk_chain::{DescriptorExt, DescriptorId};
+    use crate::multi_keychain::{KeyRing, Wallet};
+    use bitcoin::{secp256k1::Secp256k1, Network};
+    use miniscript::Descriptor;
+    use tempfile::NamedTempFile;
+
+    #[cfg(feature = "rusqlite")]
+    use crate::bdk_chain::rusqlite;
+
+    const DESCRIPTORS: [&str; 6] = ["wpkh(tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/0/*)", "wpkh(tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/1/*)", "wpkh(tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/2/*)", "wpkh(tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/3/*)", "wpkh(tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/4/*)", "wpkh(tpubDCzuCBKnZA5TNKhiJnASku7kq8Q4iqcVF82JV7mHo2NxWpXkLRbrJaGA5ToE7LCuWpcPErBbpDzbdWKN8aTdJzmRy1jQPmZvnqpwwDwCdy7/5/*)"];
+
+    fn descriptor_id(s: &str) -> DescriptorId {
+        let desc = Descriptor::parse_descriptor(&Secp256k1::new(), s)
+            .expect("failed to parse descriptor")
+            .0;
+        desc.descriptor_id()
+    }
+
+    #[cfg(feature = "rusqlite")]
+    #[test]
+    fn persist_default() -> anyhow::Result<()> {
+        let db_file = NamedTempFile::new()?;
+        let mut conn = rusqlite::Connection::open(db_file.path())?;
+        let desc_id = descriptor_id(DESCRIPTORS[0]);
+        let keyring = KeyRing::new(Network::Signet, desc_id, DESCRIPTORS[0]);
+
+        {
+            let _ = Wallet::<DescriptorId>::from_sqlite(&mut conn)?;
+            let mut wallet = Wallet::<DescriptorId>::new(keyring);
+            wallet.persist_to_sqlite(&mut conn)?;
+        }
+
+        {
+            let wallet = Wallet::from_sqlite(&mut conn)?.unwrap();
+            assert_eq!(wallet.default_keychain(), desc_id);
+        }
+
+        Ok(())
     }
 }
