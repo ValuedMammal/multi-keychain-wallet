@@ -130,7 +130,7 @@ where
         Some(((keychain, index), address))
     }
 
-    /// Iterate over `(keychain descriptor)` pairs contained in this wallet.
+    /// Iterate over `(keychain, descriptor)` pairs contained in this wallet.
     pub fn keychains(
         &self,
     ) -> impl DoubleEndedIterator<Item = (K, &Descriptor<DescriptorPublicKey>)> {
@@ -157,12 +157,12 @@ where
     }
 
     /// Obtain a reference to the indexed transaction graph.
-    pub fn tx_graph(&self) -> &KeychainTxGraph<K> {
+    pub fn tx_graph(&self) -> &IndexedTxGraph<ConfirmationBlockTime, KeychainTxOutIndex<K>> {
         &self.tx_graph
     }
 
-    /// Obtain a reference to the keychain indexer.
-    pub fn index(&self) -> &KeychainTxOutIndex<K> {
+    /// Obtain a reference to the txout index.
+    pub fn txout_index(&self) -> &KeychainTxOutIndex<K> {
         &self.tx_graph.index
     }
 
