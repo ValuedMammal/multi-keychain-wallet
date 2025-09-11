@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, ops::Deref};
 
 use bitcoin::Address;
 use miniscript::{Descriptor, DescriptorPublicKey};
@@ -14,7 +14,7 @@ use bdk_chain::{
         FullScanRequest, FullScanRequestBuilder, FullScanResponse, SyncRequest, SyncRequestBuilder,
         SyncResponse,
     },
-    CheckPoint, ConfirmationBlockTime, IndexedTxGraph, KeychainIndexed, Merge,
+    CheckPoint, ConfirmationBlockTime, IndexedTxGraph, Merge,
 };
 
 use crate::bdk_chain;
@@ -117,7 +117,7 @@ where
 
     /// Reveal next default address. Panics if the default implementation of `K` does not match
     /// a keychain contained in this wallet.
-    pub fn reveal_next_default_address_unwrap(&mut self) -> KeychainIndexed<K, Address> {
+    pub fn reveal_next_default_address_unwrap(&mut self) -> AddressInfo<K> {
         self.reveal_next_address(self.keyring.default_keychain())
             .expect("invalid keychain")
     }
@@ -125,7 +125,7 @@ where
     /// Reveal next address from the given `keychain`.
     ///
     /// This may return the last revealed address in case there are none left to reveal.
-    pub fn reveal_next_address(&mut self, keychain: K) -> Option<KeychainIndexed<K, Address>> {
+    pub fn reveal_next_address(&mut self, keychain: K) -> Option<AddressInfo<K>> {
         let ((index, spk), index_changeset) =
             self.tx_graph.index.reveal_next_spk(keychain.clone())?;
         let address = Address::from_script(&spk, self.keyring.network)
@@ -133,7 +133,11 @@ where
 
         self.stage(index_changeset);
 
-        Some(((keychain, index), address))
+        Some(AddressInfo {
+            index,
+            address,
+            keychain,
+        })
     }
 
     /// Iterate over `(keychain, descriptor)` pairs contained in this wallet.
@@ -266,6 +270,32 @@ impl Wallet<DescriptorId> {
         } else {
             Some(&self.stage)
         }
+    }
+}
+
+/// A derived address and the index it was found at.
+/// For convenience this automatically derefs to `Address`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddressInfo<K> {
+    /// Child index of this address
+    pub index: u32,
+    /// Address
+    pub address: Address,
+    /// Type of keychain
+    pub keychain: K,
+}
+
+impl<K> Deref for AddressInfo<K> {
+    type Target = Address;
+
+    fn deref(&self) -> &Self::Target {
+        &self.address
+    }
+}
+
+impl<K> fmt::Display for AddressInfo<K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.address)
     }
 }
 

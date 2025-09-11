@@ -43,12 +43,18 @@ fn main() -> anyhow::Result<()> {
     };
 
     // Reveal an address on the default keychain
-    let (indexed, addr) = wallet.reveal_next_default_address_unwrap();
-    println!("Address on default keychain:   {:?} {}", indexed, addr);
+    let addrinfo = wallet.reveal_next_default_address_unwrap();
+    println!(
+        "Address on default keychain:   ({}, {}) {}",
+        addrinfo.keychain, addrinfo.index, addrinfo.address
+    );
 
     // Reveal an address on another keychain
-    let (indexed2, addr2) = wallet.reveal_next_address(desc2_id).unwrap();
-    println!("Address on secondary keychain: {:?} {}", indexed2, addr2);
+    let addrinfo2 = wallet.reveal_next_address(desc2_id).unwrap();
+    println!(
+        "Address on default keychain:   ({}, {}) {}",
+        addrinfo2.keychain, addrinfo.index, addrinfo2.address
+    );
 
     let changeset = wallet.persist_to_sqlite(&mut conn)?;
     println!("Change persisted: {}", changeset.is_some());
