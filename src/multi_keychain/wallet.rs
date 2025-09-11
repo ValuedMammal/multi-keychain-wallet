@@ -6,8 +6,14 @@ use miniscript::{Descriptor, DescriptorPublicKey};
 #[cfg(feature = "rusqlite")]
 use bdk_chain::rusqlite;
 use bdk_chain::{
-    keychain_txout::{KeychainTxOutIndex, DEFAULT_LOOKAHEAD},
+    keychain_txout::{
+        FullScanRequestBuilderExt, KeychainTxOutIndex, SyncRequestBuilderExt, DEFAULT_LOOKAHEAD,
+    },
     local_chain::LocalChain,
+    spk_client::{
+        FullScanRequest, FullScanRequestBuilder, FullScanResponse, SyncRequest, SyncRequestBuilder,
+        SyncResponse,
+    },
     CheckPoint, ConfirmationBlockTime, IndexedTxGraph, KeychainIndexed, Merge,
 };
 
@@ -274,13 +280,74 @@ pub struct Update<K> {
     pub last_active_indices: BTreeMap<K, u32>,
 }
 
-impl<K> From<bdk_chain::spk_client::FullScanResponse<K>> for Update<K> {
+impl<K> From<FullScanResponse<K>> for Update<K> {
     fn from(resp: bdk_chain::spk_client::FullScanResponse<K>) -> Self {
         Self {
             chain: resp.chain_update,
             tx_update: resp.tx_update,
             last_active_indices: resp.last_active_indices,
         }
+    }
+}
+
+impl<K> From<SyncResponse> for Update<K> {
+    fn from(resp: bdk_chain::spk_client::SyncResponse) -> Self {
+        Self {
+            chain: resp.chain_update,
+            tx_update: resp.tx_update,
+            last_active_indices: BTreeMap::new(),
+        }
+    }
+}
+
+/// Methods to construct sync/full-scan requests for spk-based chain sources.
+impl<K> Wallet<K>
+where
+    K: Ord + Clone + fmt::Debug,
+{
+    /// Create a partial [`SyncRequest`] for all revealed spks at `start_time`.
+    pub fn start_sync_with_revealed_spks_at(
+        &self,
+        start_time: u64,
+    ) -> SyncRequestBuilder<(K, u32)> {
+        SyncRequest::builder_at(start_time)
+            .chain_tip(self.chain.tip())
+            .revealed_spks_from_indexer(&self.tx_graph.index, ..)
+            .expected_spk_txids(self.tx_graph.list_expected_spk_txids(
+                &self.chain,
+                self.chain.tip().block_id(),
+                ..,
+            ))
+    }
+
+    /// Create a partial [`SyncRequest`] for all revealed spks at the current system time.
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+    #[cfg(feature = "std")]
+    pub fn start_sync_with_revealed_spks(&self) -> SyncRequestBuilder<(K, u32)> {
+        SyncRequest::builder()
+            .chain_tip(self.chain.tip())
+            .revealed_spks_from_indexer(&self.tx_graph.index, ..)
+            .expected_spk_txids(self.tx_graph.list_expected_spk_txids(
+                &self.chain,
+                self.chain.tip().block_id(),
+                ..,
+            ))
+    }
+
+    /// Create a [`FullScanRequest`] at the `start_time` time.
+    pub fn start_full_scan_at(&self, start_time: u64) -> FullScanRequestBuilder<K> {
+        FullScanRequest::builder_at(start_time)
+            .chain_tip(self.chain.tip())
+            .spks_from_indexer(&self.tx_graph.index)
+    }
+
+    /// Create a [`FullScanRequest`] at the current system time.
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+    #[cfg(feature = "std")]
+    pub fn start_full_scan(&self) -> FullScanRequestBuilder<K> {
+        FullScanRequest::builder()
+            .chain_tip(self.chain.tip())
+            .spks_from_indexer(&self.tx_graph.index)
     }
 }
 
