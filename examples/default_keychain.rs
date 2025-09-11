@@ -48,8 +48,11 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
-    let (indexed, addr) = wallet.reveal_next_default_address_unwrap();
-    println!("Address: {:?} {}", indexed, addr);
+    let addrinfo = wallet.reveal_next_default_address_unwrap();
+    println!(
+        "Address:   ({}, {}) {}",
+        addrinfo.keychain, addrinfo.index, addrinfo.address
+    );
 
     let changeset = wallet.persist_to_sqlite(&mut conn)?;
     println!("Change persisted: {}", changeset.is_some());
