@@ -25,6 +25,7 @@ path = "."
 [dev-dependencies]
 anyhow = "1"
 tempfile = "3.21.0"
+bdk_electrum = {version = "0.23.1"}
 
 [[example]]
 name = "keyring"
@@ -37,3 +38,6 @@ required-features = ["rusqlite"]
 [[example]]
 name = "default_keychain"
 required-features = ["rusqlite"]
+
+[[example]]
+name = "electrum_example"
