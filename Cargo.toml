@@ -4,6 +4,10 @@ version = "0.0.1"
 edition = "2021"
 rust-version = "1.63.0"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 bdk_wallet = { version = "2.0.0", default-features = false }
 bitcoin = { version = "0.32.6", features = ["serde", "base64"], default-features = false }

@@ -350,8 +350,9 @@ where
             ))
     }
 
-    #[cfg(feature = "std")]
     /// Create a partial [`SyncRequest`] for all revealed spks at the current system time.
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+    #[cfg(feature = "std")]
     pub fn start_sync_with_revealed_spks(&self) -> SyncRequestBuilder<(K, u32)> {
         SyncRequest::builder()
             .chain_tip(self.chain.tip())
@@ -363,15 +364,16 @@ where
             ))
     }
 
-    /// Create a [`FullScanRequest] at the [`start_time`] time.
+    /// Create a [`FullScanRequest`] at the `start_time` time.
     pub fn start_full_scan_at(&self, start_time: u64) -> FullScanRequestBuilder<K> {
         FullScanRequest::builder_at(start_time)
             .chain_tip(self.chain.tip())
             .spks_from_indexer(&self.tx_graph.index)
     }
 
+    /// Create a [`FullScanRequest`] at the current system time.
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
     #[cfg(feature = "std")]
-    /// Create a [`FullScanRequest] at the current system time.
     pub fn start_full_scan(&self) -> FullScanRequestBuilder<K> {
         FullScanRequest::builder()
             .chain_tip(self.chain.tip())
