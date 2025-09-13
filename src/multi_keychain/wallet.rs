@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, ops::Deref};
 
 use bitcoin::Address;
 use miniscript::{Descriptor, DescriptorPublicKey};
@@ -6,9 +6,15 @@ use miniscript::{Descriptor, DescriptorPublicKey};
 #[cfg(feature = "rusqlite")]
 use bdk_chain::rusqlite;
 use bdk_chain::{
-    keychain_txout::{KeychainTxOutIndex, DEFAULT_LOOKAHEAD},
+    keychain_txout::{
+        FullScanRequestBuilderExt, KeychainTxOutIndex, SyncRequestBuilderExt, DEFAULT_LOOKAHEAD,
+    },
     local_chain::LocalChain,
-    CheckPoint, ConfirmationBlockTime, IndexedTxGraph, KeychainIndexed, Merge,
+    spk_client::{
+        FullScanRequest, FullScanRequestBuilder, FullScanResponse, SyncRequest, SyncRequestBuilder,
+        SyncResponse,
+    },
+    CheckPoint, ConfirmationBlockTime, IndexedTxGraph, Merge,
 };
 
 use crate::bdk_chain;
@@ -111,7 +117,7 @@ where
 
     /// Reveal next default address. Panics if the default implementation of `K` does not match
     /// a keychain contained in this wallet.
-    pub fn reveal_next_default_address_unwrap(&mut self) -> KeychainIndexed<K, Address> {
+    pub fn reveal_next_default_address_unwrap(&mut self) -> AddressInfo<K> {
         self.reveal_next_address(self.keyring.default_keychain())
             .expect("invalid keychain")
     }
@@ -119,7 +125,7 @@ where
     /// Reveal next address from the given `keychain`.
     ///
     /// This may return the last revealed address in case there are none left to reveal.
-    pub fn reveal_next_address(&mut self, keychain: K) -> Option<KeychainIndexed<K, Address>> {
+    pub fn reveal_next_address(&mut self, keychain: K) -> Option<AddressInfo<K>> {
         let ((index, spk), index_changeset) =
             self.tx_graph.index.reveal_next_spk(keychain.clone())?;
         let address = Address::from_script(&spk, self.keyring.network)
@@ -127,7 +133,11 @@ where
 
         self.stage(index_changeset);
 
-        Some(((keychain, index), address))
+        Some(AddressInfo {
+            index,
+            address,
+            keychain,
+        })
     }
 
     /// Iterate over `(keychain, descriptor)` pairs contained in this wallet.
@@ -263,6 +273,32 @@ impl Wallet<DescriptorId> {
     }
 }
 
+/// A derived address and the index it was found at.
+/// For convenience this automatically derefs to `Address`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddressInfo<K> {
+    /// Child index of this address
+    pub index: u32,
+    /// Address
+    pub address: Address,
+    /// Type of keychain
+    pub keychain: K,
+}
+
+impl<K> Deref for AddressInfo<K> {
+    type Target = Address;
+
+    fn deref(&self) -> &Self::Target {
+        &self.address
+    }
+}
+
+impl<K> fmt::Display for AddressInfo<K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.address)
+    }
+}
+
 /// Contains structures for updating a multi-keychain wallet.
 #[derive(Debug)]
 pub struct Update<K> {
@@ -274,13 +310,74 @@ pub struct Update<K> {
     pub last_active_indices: BTreeMap<K, u32>,
 }
 
-impl<K> From<bdk_chain::spk_client::FullScanResponse<K>> for Update<K> {
+impl<K> From<FullScanResponse<K>> for Update<K> {
     fn from(resp: bdk_chain::spk_client::FullScanResponse<K>) -> Self {
         Self {
             chain: resp.chain_update,
             tx_update: resp.tx_update,
             last_active_indices: resp.last_active_indices,
         }
+    }
+}
+
+impl<K> From<SyncResponse> for Update<K> {
+    fn from(resp: bdk_chain::spk_client::SyncResponse) -> Self {
+        Self {
+            chain: resp.chain_update,
+            tx_update: resp.tx_update,
+            last_active_indices: BTreeMap::new(),
+        }
+    }
+}
+
+/// Methods to construct sync/full-scan requests for spk-based chain sources.
+impl<K> Wallet<K>
+where
+    K: Ord + Clone + fmt::Debug,
+{
+    /// Create a partial [`SyncRequest`] for all revealed spks at `start_time`.
+    pub fn start_sync_with_revealed_spks_at(
+        &self,
+        start_time: u64,
+    ) -> SyncRequestBuilder<(K, u32)> {
+        SyncRequest::builder_at(start_time)
+            .chain_tip(self.chain.tip())
+            .revealed_spks_from_indexer(&self.tx_graph.index, ..)
+            .expected_spk_txids(self.tx_graph.list_expected_spk_txids(
+                &self.chain,
+                self.chain.tip().block_id(),
+                ..,
+            ))
+    }
+
+    /// Create a partial [`SyncRequest`] for all revealed spks at the current system time.
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+    #[cfg(feature = "std")]
+    pub fn start_sync_with_revealed_spks(&self) -> SyncRequestBuilder<(K, u32)> {
+        SyncRequest::builder()
+            .chain_tip(self.chain.tip())
+            .revealed_spks_from_indexer(&self.tx_graph.index, ..)
+            .expected_spk_txids(self.tx_graph.list_expected_spk_txids(
+                &self.chain,
+                self.chain.tip().block_id(),
+                ..,
+            ))
+    }
+
+    /// Create a [`FullScanRequest`] at the `start_time` time.
+    pub fn start_full_scan_at(&self, start_time: u64) -> FullScanRequestBuilder<K> {
+        FullScanRequest::builder_at(start_time)
+            .chain_tip(self.chain.tip())
+            .spks_from_indexer(&self.tx_graph.index)
+    }
+
+    /// Create a [`FullScanRequest`] at the current system time.
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+    #[cfg(feature = "std")]
+    pub fn start_full_scan(&self) -> FullScanRequestBuilder<K> {
+        FullScanRequest::builder()
+            .chain_tip(self.chain.tip())
+            .spks_from_indexer(&self.tx_graph.index)
     }
 }
 

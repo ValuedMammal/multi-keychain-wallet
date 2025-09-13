@@ -91,50 +91,50 @@ fn main() -> anyhow::Result<()> {
         "=".repeat(50)
     );
 
-    let (keychain_and_index, addr) = wallet.reveal_next_default_address_unwrap();
+    let addrinfo = wallet.reveal_next_default_address_unwrap();
     println!(
-        "Default keychain address (index {:?}): {}",
-        keychain_and_index.1, addr
+        "Default keychain address (index {}): {}",
+        addrinfo.index, addrinfo.address
     );
 
-    let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_johnny.clone()).unwrap();
+    let addrinfo_johnny = wallet.reveal_next_address(keychain_johnny.clone()).unwrap();
     println!(
-        "Johnny's address (index {:?}):         {}",
-        keychain_and_index.1, addr
+        "Johnny's address (index {}):         {}",
+        addrinfo_johnny.index, addrinfo_johnny.address
     );
 
-    let (keychain_and_index, addr) = wallet
+    let addrinfo_samantha = wallet
         .reveal_next_address(keychain_samantha.clone())
         .unwrap();
     println!(
-        "Samantha's address (index {:?}):       {}",
-        keychain_and_index.1, addr
+        "Samantha's address (index {}):       {}",
+        addrinfo_samantha.index, addrinfo_samantha.address
     );
 
-    let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_riley.clone()).unwrap();
+    let addrinfo_riley = wallet.reveal_next_address(keychain_riley.clone()).unwrap();
     println!(
         "Riley's address (index {:?}):          {}",
-        keychain_and_index.1, addr
+        addrinfo_riley.index, addrinfo_riley.address
     );
 
-    let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_max.clone()).unwrap();
+    let addrinfo_max = wallet.reveal_next_address(keychain_max.clone()).unwrap();
     println!(
         "Max's address (index {:?}):            {}",
-        keychain_and_index.1, addr
+        addrinfo_max.index, addrinfo_max.address
     );
 
-    let (keychain_and_index, addr) = wallet
+    let addrinfo_penelope = wallet
         .reveal_next_address(keychain_penelope.clone())
         .unwrap();
     println!(
         "Penelope's address (index {:?}):       {}",
-        keychain_and_index.1, addr
+        addrinfo_penelope.index, addrinfo_penelope.address
     );
 
-    let (keychain_and_index, addr) = wallet.reveal_next_address(keychain_george.clone()).unwrap();
+    let addrinfo_george = wallet.reveal_next_address(keychain_george.clone()).unwrap();
     println!(
         "George's address (index {:?}):         {}",
-        keychain_and_index.1, addr
+        addrinfo_george.index, addrinfo_george.address
     );
 
     Ok(())
