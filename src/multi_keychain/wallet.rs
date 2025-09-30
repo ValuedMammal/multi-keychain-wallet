@@ -3,7 +3,7 @@ use alloc::{
     sync::Arc,
 };
 use core::{
-    fmt::{self, Debug},
+    fmt::{self, Debug, Display},
     ops::Deref,
 };
 
@@ -16,7 +16,7 @@ use bdk_chain::{
     keychain_txout::{
         FullScanRequestBuilderExt, KeychainTxOutIndex, SyncRequestBuilderExt, DEFAULT_LOOKAHEAD,
     },
-    local_chain::{ApplyHeaderError, CannotConnectError, LocalChain},
+    local_chain::{ApplyHeaderError, LocalChain},
     spk_client::{
         FullScanRequest, FullScanRequestBuilder, FullScanResponse, SyncRequest, SyncRequestBuilder,
         SyncResponse,
@@ -392,6 +392,22 @@ where
     }
 }
 
+/// Error returned by [`apply_block`] and [`apply_block_connected_to`]
+/// when underlying call to [`apply_header_connected_to`] errs.
+///
+///
+/// [`apply_header_connected_to`]: bdk_chain::local_chain::LocalChain::apply_header_connected_to
+/// [`apply_block`]: Wallet::apply_block
+/// [`apply_block_connected_to`]: Wallet::apply_block_connected_to
+#[derive(Debug)]
+pub struct ApplyBlockError(ApplyHeaderError);
+
+impl Display for ApplyBlockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "the block cannot be applied: {}", self.0)
+    }
+}
+
 /// Methods for block-by-block syncing
 impl<K> Wallet<K>
 where
@@ -401,7 +417,7 @@ where
     /// and `prev_blockhash`.
     ///
     /// [`apply_block_connected_to`]: Self::apply_block_connected_to
-    pub fn apply_block(&mut self, block: &Block, height: u32) -> Result<(), CannotConnectError> {
+    pub fn apply_block(&mut self, block: &Block, height: u32) -> Result<(), ApplyBlockError> {
         let connected_to = match height.checked_sub(1) {
             Some(prev_ht) => BlockId {
                 height: prev_ht,
@@ -413,12 +429,6 @@ where
             },
         };
         self.apply_block_connected_to(block, height, connected_to)
-            .map_err(|err| match err {
-                ApplyHeaderError::InconsistentBlocks => {
-                    unreachable!("connected_to is derived from the block so must be consistent")
-                }
-                ApplyHeaderError::CannotConnect(err) => err,
-            })
     }
 
     /// Connects the `block` of `height` to the internal chain and applies relevant transactions from the block to the wallet.
@@ -430,11 +440,12 @@ where
         block: &Block,
         height: u32,
         connected_to: BlockId,
-    ) -> Result<(), ApplyHeaderError> {
+    ) -> Result<(), ApplyBlockError> {
         let mut changeset = ChangeSet::default();
         changeset.merge(
             self.chain
-                .apply_header_connected_to(&block.header, height, connected_to)?
+                .apply_header_connected_to(&block.header, height, connected_to)
+                .map_err(ApplyBlockError)?
                 .into(),
         );
         changeset.merge(self.tx_graph.apply_block_relevant(block, height).into());
