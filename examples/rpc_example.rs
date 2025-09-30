@@ -1,21 +1,21 @@
+use bitcoin::{secp256k1::Secp256k1, Network, Transaction};
 use miniscript::Descriptor;
 use multi_keychain_wallet::bdk_chain::{DescriptorExt, DescriptorId};
-use std::sync::Arc;
-
-use bitcoin::{secp256k1::Secp256k1, Network, Transaction};
 use multi_keychain_wallet::multi_keychain::{KeyRing, Wallet};
+use std::path::PathBuf;
+use std::{env, sync::Arc};
 
 use bdk_bitcoind_rpc::{
     bitcoincore_rpc::{Auth, Client},
     Emitter,
 };
 
-const USER: &str = "alice";
-const PASSWORD: &str = "password";
 const EXTERNAL_DESCRIPTOR: &str = "tr(tprv8ZgxMBicQKsPdrjwWCyXqqJ4YqcyG4DmKtjjsRt29v1PtD3r3PuFJAjWytzcvSTKnZAGAkPSmnrdnuHWxCAwy3i1iPhrtKAfXRH7dVCNGp6/86'/1'/0'/0/*)#g9xn7wf9";
 const INTERNAL_DESCRIPTOR: &str = "tr(tprv8ZgxMBicQKsPdrjwWCyXqqJ4YqcyG4DmKtjjsRt29v1PtD3r3PuFJAjWytzcvSTKnZAGAkPSmnrdnuHWxCAwy3i1iPhrtKAfXRH7dVCNGp6/86'/1'/0'/1/*)#e3rjrmea";
 
 fn main() {
+    let cookie_file = env::var("RPC_COOKIE").unwrap_or("../.bitcoin/regtest/.cookie".to_string());
+
     let mut keyring = KeyRing::<DescriptorId>::new(
         Network::Regtest,
         get_descriptor_id(EXTERNAL_DESCRIPTOR),
@@ -36,7 +36,7 @@ fn main() {
 
     let rpc_client: Client = Client::new(
         "http://127.0.0.1:18443",
-        Auth::UserPass(USER.to_string(), PASSWORD.to_string()),
+        Auth::CookieFile(PathBuf::from(cookie_file)),
     )
     .unwrap();
 
