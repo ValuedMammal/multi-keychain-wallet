@@ -1,6 +1,13 @@
-use core::{fmt, ops::Deref};
+use alloc::{
+    collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+    sync::Arc,
+};
+use core::{
+    fmt::{self, Debug, Display},
+    ops::Deref,
+};
 
-use bitcoin::Address;
+use bitcoin::{Address, Block, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorPublicKey};
 
 #[cfg(feature = "rusqlite")]
@@ -9,16 +16,15 @@ use bdk_chain::{
     keychain_txout::{
         FullScanRequestBuilderExt, KeychainTxOutIndex, SyncRequestBuilderExt, DEFAULT_LOOKAHEAD,
     },
-    local_chain::LocalChain,
+    local_chain::{ApplyHeaderError, LocalChain},
     spk_client::{
         FullScanRequest, FullScanRequestBuilder, FullScanResponse, SyncRequest, SyncRequestBuilder,
         SyncResponse,
     },
-    CheckPoint, ConfirmationBlockTime, IndexedTxGraph, Merge,
+    BlockId, CanonicalizationParams, CheckPoint, ConfirmationBlockTime, IndexedTxGraph, Merge,
 };
 
 use crate::bdk_chain;
-use crate::collections::BTreeMap;
 use crate::multi_keychain::{ChangeSet, KeyRing};
 
 /// Alias for a [`IndexedTxGraph`].
@@ -179,6 +185,11 @@ where
     /// Obtain a reference to the local chain.
     pub fn local_chain(&self) -> &LocalChain {
         &self.chain
+    }
+
+    /// Returns the latest `CheckPoint`.
+    pub fn latest_checkpoint(&self) -> CheckPoint {
+        self.chain.tip()
     }
 
     /// Apply update.
@@ -378,6 +389,108 @@ where
         FullScanRequest::builder()
             .chain_tip(self.chain.tip())
             .spks_from_indexer(&self.tx_graph.index)
+    }
+}
+
+/// Error returned by [`apply_block`] and [`apply_block_connected_to`]
+/// when underlying call to [`apply_header_connected_to`] errs.
+///
+///
+/// [`apply_header_connected_to`]: bdk_chain::local_chain::LocalChain::apply_header_connected_to
+/// [`apply_block`]: Wallet::apply_block
+/// [`apply_block_connected_to`]: Wallet::apply_block_connected_to
+#[derive(Debug)]
+pub struct ApplyBlockError(ApplyHeaderError);
+
+impl Display for ApplyBlockError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "the block cannot be applied: {}", self.0)
+    }
+}
+
+/// Methods for block-by-block syncing
+impl<K> Wallet<K>
+where
+    K: Ord + Clone + fmt::Debug,
+{
+    /// This is equivalent to calling [`apply_block_connected_to`] with `connected_to` parameter corresponding to `height-1`
+    /// and `prev_blockhash`.
+    ///
+    /// [`apply_block_connected_to`]: Self::apply_block_connected_to
+    pub fn apply_block(&mut self, block: &Block, height: u32) -> Result<(), ApplyBlockError> {
+        let connected_to = match height.checked_sub(1) {
+            Some(prev_ht) => BlockId {
+                height: prev_ht,
+                hash: block.header.prev_blockhash,
+            },
+            None => BlockId {
+                height,
+                hash: block.block_hash(),
+            },
+        };
+        self.apply_block_connected_to(block, height, connected_to)
+    }
+
+    /// Connects the `block` of `height` to the internal chain and applies relevant transactions from the block to the wallet.
+    ///
+    /// **WARNING**: The wallet must be persisted after a call to this method if you need the inserted block data to be reloaded
+    /// after closing the wallet.
+    pub fn apply_block_connected_to(
+        &mut self,
+        block: &Block,
+        height: u32,
+        connected_to: BlockId,
+    ) -> Result<(), ApplyBlockError> {
+        let mut changeset = ChangeSet::default();
+        changeset.merge(
+            self.chain
+                .apply_header_connected_to(&block.header, height, connected_to)
+                .map_err(ApplyBlockError)?
+                .into(),
+        );
+        changeset.merge(self.tx_graph.apply_block_relevant(block, height).into());
+        self.stage.merge(changeset);
+        Ok(())
+    }
+
+    /// Filters the relevant transactions from `unconfirmed_txs` and applies to wallet.
+    ///
+    /// This method takes in an iterator of `(tx, last_seen)` where `last_seen` is the timestamp of
+    /// when the transaction was last seen, in the mempool. This is used for conflict resolution
+    /// when there is conflicting unconfirmed transactions. The transaction with the later
+    /// `last_seen` is prioritized.
+    /// **WARNING**: The wallet must be persisted after a call to this method if you need the applied unconfirmed txs to be reloaded
+    /// after closing the wallet.
+    pub fn apply_unconfirmed_txs<T: Into<Arc<Transaction>>>(
+        &mut self,
+        unconfirmed_txs: impl IntoIterator<Item = (T, u64)>,
+    ) {
+        let tx_graph_changeset = self
+            .tx_graph
+            .batch_insert_relevant_unconfirmed(unconfirmed_txs);
+        self.stage.merge(tx_graph_changeset.into());
+    }
+
+    /// Apply evictions of the given transaction IDs with their associated timestamps.
+    pub fn apply_evicted_txs(&mut self, evicted_txs: impl IntoIterator<Item = (Txid, u64)>) {
+        let chain = &self.chain;
+        let canon_txids: BTreeSet<Txid> = self
+            .tx_graph
+            .graph()
+            .list_canonical_txs(
+                chain,
+                chain.tip().block_id(),
+                CanonicalizationParams::default(),
+            )
+            .map(|c_tx| c_tx.tx_node.txid)
+            .collect();
+
+        let tx_graph_changeset = self.tx_graph.batch_insert_relevant_evicted_at(
+            evicted_txs
+                .into_iter()
+                .filter(|(txid, _)| canon_txids.contains(txid)),
+        );
+        self.stage.merge(tx_graph_changeset.into());
     }
 }
 

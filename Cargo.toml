@@ -26,6 +26,7 @@ path = "."
 anyhow = "1"
 tempfile = "3.21.0"
 bdk_electrum = {version = "0.23.1"}
+bdk_bitcoind_rpc = {version = "0.22.0"}
 
 [[example]]
 name = "keyring"
@@ -41,3 +42,6 @@ required-features = ["rusqlite"]
 
 [[example]]
 name = "electrum_example"
+
+[[example]]
+name = "rpc_example"
